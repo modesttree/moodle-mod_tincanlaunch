@@ -12,6 +12,7 @@ description: |
   Store you configure, per activity or site-wide.
 labels:
   - fully-free
+  - external-account
   - commercial-support-available
 links:
   issues: https://github.com/davidpesce/moodle-mod_tincanlaunch/issues
