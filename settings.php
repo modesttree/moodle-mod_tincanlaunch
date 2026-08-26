@@ -107,6 +107,15 @@ if ($ADMIN->fulltree) {
         PARAM_TEXT
     ));
 
+    // Default voided verb used when an activity does not set one itself.
+    $settings->add(new admin_setting_configtext(
+        'tincanlaunch/tincanvoidedid',
+        get_string('tincanlaunchvoidedid', 'tincanlaunch'),
+        get_string('tincanlaunchvoidedid_help', 'tincanlaunch'),
+        'http://adlnet.gov/expapi/verbs/voided',
+        PARAM_TEXT
+    ));
+
     $customfieldrecords = $DB->get_records('user_info_field');
     if ($customfieldrecords) {
         $customfields = [];

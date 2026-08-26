@@ -62,13 +62,18 @@ class custom_completion extends activity_custom_completion {
         }
 
         $tincanverbid = tincanlaunch_get_completion_verb($tincanlaunch);
+        $tincanvoidedid = tincanlaunch_get_voided_verb($tincanlaunch);
 
         debugging('mod_tincanlaunch LRS statements fetching for filter: ' . json_encode(array(
             'tincanactivityid' => $tincanlaunch->tincanactivityid,
             'actor' => tincanlaunch_getactor($cm->instance, $DB->get_record('user', array ('id' => $userid))),
             'verb' => $tincanverbid,
+            'voidedverb' => $tincanvoidedid,
             'expiry' => $expiryrangestartdate
         ), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES), DEBUG_DEVELOPER);
+
+        $statementquery = null;
+        $voidedquery = null;
 
         if (!empty($tincanverbid)) {
             // Retrieve statements from LRS matching actor, object, and completion verb.
@@ -85,22 +90,61 @@ class custom_completion extends activity_custom_completion {
             );
         }
 
+        if (!empty($tincanvoidedid)) {
+            // Retrieve voided statements for this actor (any object).
+            $user = $DB->get_record('user', array ('id' => $userid));
+            $voidedquery = tincanlaunch_get_statements(
+                $tincanlaunchsettings['tincanlaunchlrsendpoint'],
+                $tincanlaunchsettings['tincanlaunchlrslogin'],
+                $tincanlaunchsettings['tincanlaunchlrspass'],
+                $tincanlaunchsettings['tincanlaunchlrsversion'],
+                null,
+                tincanlaunch_getactor($cm->instance, $user),
+                $tincanvoidedid,
+                null
+            );
+        }
+
+        // Build a lookup of statement IDs that have been voided.
+        $voidedstatementids = array();
+        if (!empty($voidedquery->content) && $voidedquery->success) {
+            foreach ($voidedquery->content as $voidedstatement) {
+                $voidedtarget = $voidedstatement->getTarget();
+                if ($voidedtarget !== null && method_exists($voidedtarget, 'getId')) {
+                    $voidedobjectid = $voidedtarget->getId();
+                    if (!empty($voidedobjectid)) {
+                        $voidedstatementids[$voidedobjectid] = true;
+                    }
+                }
+            }
+        }
+
+        debugging('mod_tincanlaunch LRS voided statement IDs lookup: ' . json_encode(array_keys($voidedstatementids), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES), DEBUG_DEVELOPER);
+
         // Determine if the statement exists.
         if (!empty($statementquery->content) && $statementquery->success) {
-            debugging('mod_tincanlaunch LRS statements fetched: ' . json_encode($statementquery,
-            JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES), DEBUG_DEVELOPER);
+            debugging('mod_tincanlaunch LRS statements fetched # statements: ' . count($statementquery->content),
+            DEBUG_DEVELOPER);
 
             foreach ($statementquery->content as $statement) {
                 // Check if the statement activity id matches the launched activity URI.
                 $target = $statement->getTarget();
                 $objectid = $target->getId();
                 $objecttype = $target->getObjectType();
+                $statementid = $statement->getId();
 
                 debugging('mod_tincanlaunch LRS statement: ' . json_encode(array(
                     'tincanactivityid' => $tincanlaunch->tincanactivityid,
                     'objectid' => $objectid,
                     'objecttype' => $objecttype,
+                    'statementid' => $statementid,
+                    'voided' => isset($voidedstatementids[$statementid]),
                 ), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES), DEBUG_DEVELOPER);
+
+                // Skip statements that have been voided.
+                if (isset($voidedstatementids[$statementid])) {
+                    continue;
+                }
 
                 if ($objecttype == "Activity" && $tincanlaunch->tincanactivityid == $objectid) {
                     // If expiry is set, see if the timestamp is within expiry.

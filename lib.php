@@ -562,7 +562,7 @@ function tincanlaunch_validate_package($file) {
  * @param string $basiclogin login/key for the LRS
  * @param string $basicpass pass/secret for the LRS
  * @param string $version version of xAPI to use
- * @param string $activityid Activity Id to filter by
+ * @param string|null $activityid Activity Id to filter by (null for no activity filter)
  * @param TinCan $agent Aagent Agent to filter by
  * @param string $verb Verb Id to filter by
  * @param string $since Since date to filter by
@@ -575,12 +575,15 @@ function tincanlaunch_get_statements($url, $basiclogin, $basicpass, $version, $a
     $statementsquery = array(
         "agent" => $agent,
         "verb" => new \TinCan\Verb(array("id" => trim($verb))),
-        "activity" => new \TinCan\Activity(array("id" => trim($activityid))),
         "related_activities" => "false",
         // Full statements are required (not just ids) so that completion checks
         // and debug output can inspect the statement target/object.
         "format" => "exact"
     );
+
+    if (!is_null($activityid)) {
+        $statementsquery["activity"] = new \TinCan\Activity(array("id" => trim($activityid)));
+    }
 
     if (!is_null($since)) {
         $statementsquery["since"] = $since;
@@ -678,6 +681,24 @@ function tincanlaunch_get_completion_verb($tincanlaunch) {
 
     $globalverb = get_config('tincanlaunch', 'tincanverbid');
     return $globalverb !== false ? trim($globalverb) : '';
+}
+
+/**
+ * Returns the voided verb IRI for a tincanlaunch instance.
+ *
+ * Uses the activity-specific voided verb when set, otherwise falls back to the
+ * plugin-wide default configured on the admin settings page.
+ *
+ * @param stdClass $tincanlaunch The tincanlaunch instance record.
+ * @return string The voided verb IRI, or empty string if none is configured anywhere.
+ */
+function tincanlaunch_get_voided_verb($tincanlaunch) {
+    if (!empty($tincanlaunch->tincanvoidedid)) {
+        return $tincanlaunch->tincanvoidedid;
+    }
+
+    $globalverb = get_config('tincanlaunch', 'tincanvoidedid');
+    return $globalverb !== false ? trim($globalverb) : 'http://adlnet.gov/expapi/verbs/voided';
 }
 
 /**

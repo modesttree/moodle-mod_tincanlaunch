@@ -123,6 +123,8 @@ $string['completiondetail:completionbyverbdesc'] = 'Student required to receive 
 $string['completiondetail:completionexpirydesc'] = 'Student must have completed within the last <b>{$a}</b> days.';
 $string['tincanlaunchverbid'] = 'Default completion verb';
 $string['tincanlaunchverbid_help'] = 'The xAPI verb IRI used for completion tracking when an activity does not set its own verb. Activities that leave their "Completion by verb" field empty will use this value.';
+$string['tincanlaunchvoidedid'] = 'Default voided verb';
+$string['tincanlaunchvoidedid_help'] = 'The xAPI verb IRI used to identify voided statements when an activity does not set its own voided verb. A completion statement is ignored if a voided statement exists whose object references that completion statement ID.';
 
 // View settings.
 $string['tincanlaunchviewfirstlaunched'] = 'First launched';
