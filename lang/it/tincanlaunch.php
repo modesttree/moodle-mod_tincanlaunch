@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
+
 /**
  * Italian strings for tincanlaunch
  *
@@ -27,11 +28,12 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$string['tincanlaunch_attempt'] = 'Nuovo tentativo';
-$string['tincanlaunch_completed'] = 'Completa esperienza!';
-$string['tincanlaunch_notavailable'] = 'The Learning Record Store non è disponibile. Si prega di contattare un amministratore di sistema.';
-$string['tincanlaunch_progress'] = 'Tentativo in corso';
 $string['tincanlaunchviewfirstlaunched'] = 'Lanciato';
 $string['tincanlaunchviewlastlaunched'] = 'Ultimo lanciato';
-$string['tincanlaunchviewlaunchlink'] = 'Lancio';
 $string['tincanlaunchviewlaunchlinkheader'] = 'Collegamento di lancio';
+$string['tincanlaunchviewlaunchlink'] = 'Lancio';
+
+$string['tincanlaunch_completed'] = 'Completa esperienza!';
+$string['tincanlaunch_progress'] = 'Tentativo in corso';
+$string['tincanlaunch_attempt'] = 'Nuovo tentativo';
+$string['tincanlaunch_notavailable'] = 'The Learning Record Store non è disponibile. Si prega di contattare un amministratore di sistema.';

@@ -62,16 +62,8 @@ function xmldb_tincanlaunch_upgrade($oldversion) {
 
     if ($oldversion < 2023040300) {
         $table = new xmldb_table('tincanlaunch');
-        $field = new xmldb_field(
-            'tincansimplelaunchnav',
-            XMLDB_TYPE_INTEGER,
-            '1',
-            null,
-            XMLDB_NOTNULL,
-            null,
-            0,
-            'tincanmultipleregs'
-        );
+        $field = new xmldb_field('tincansimplelaunchnav', XMLDB_TYPE_INTEGER, '1', null,
+            XMLDB_NOTNULL, null, 0, 'tincanmultipleregs');
 
         // Add field tincansimplelaunchnav.
         if (!$dbman->field_exists($table, $field)) {
@@ -79,62 +71,6 @@ function xmldb_tincanlaunch_upgrade($oldversion) {
         }
 
         upgrade_mod_savepoint(true, 2023040300, 'tincanlaunch');
-    }
-
-    if ($oldversion < 2026022501) {
-        $table = new xmldb_table('tincanlaunch');
-        $field = new xmldb_field(
-            'tincanlaunchtype',
-            XMLDB_TYPE_INTEGER,
-            '1',
-            null,
-            XMLDB_NOTNULL,
-            null,
-            1,
-            'tincanmultipleregs'
-        );
-
-        // Add field tincanlaunchtype.
-        if (!$dbman->field_exists($table, $field)) {
-            $dbman->add_field($table, $field);
-        }
-
-        // Backfill: set tincanlaunchtype = 0 for instances that have uploaded packages.
-        $sql = "UPDATE {tincanlaunch} t
-                   SET tincanlaunchtype = 0
-                 WHERE EXISTS (
-                       SELECT 1
-                         FROM {files} f
-                         JOIN {context} ctx ON ctx.id = f.contextid
-                         JOIN {course_modules} cm ON cm.id = ctx.instanceid AND ctx.contextlevel = 70
-                        WHERE cm.instance = t.id
-                          AND f.component = 'mod_tincanlaunch'
-                          AND f.filearea = 'package'
-                          AND f.filename <> '.'
-                       )";
-        $DB->execute($sql);
-
-        upgrade_mod_savepoint(true, 2026022501, 'tincanlaunch');
-    }
-
-    if ($oldversion < 2026022502) {
-        $table = new xmldb_table('tincanlaunch');
-        $field = new xmldb_field(
-            'grade',
-            XMLDB_TYPE_INTEGER,
-            '10',
-            null,
-            XMLDB_NOTNULL,
-            null,
-            0,
-            'tincansimplelaunchnav'
-        );
-
-        if (!$dbman->field_exists($table, $field)) {
-            $dbman->add_field($table, $field);
-        }
-
-        upgrade_mod_savepoint(true, 2026022502, 'tincanlaunch');
     }
 
     // Final return of upgrade result (true, all went good) to Moodle.

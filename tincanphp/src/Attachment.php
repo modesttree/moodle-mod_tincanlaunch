@@ -1,18 +1,4 @@
 <?php
-// This file is part of Moodle - https://moodle.org/
-//
-// Moodle is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// Moodle is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 /*
     Copyright 2014 Rustici Software
 
@@ -28,15 +14,14 @@
     See the License for the specific language governing permissions and
     limitations under the License.
 */
+
 namespace TinCan;
 
-class Attachment implements ComparableInterface, VersionableInterface {
-    use ArraySetterTrait;
-    use FromJSONTrait;
-    use AsVersionTrait;
-    use SignatureComparisonTrait;
+class Attachment implements VersionableInterface, ComparableInterface
+{
+    use ArraySetterTrait, FromJSONTrait, AsVersionTrait, SignatureComparisonTrait;
 
-    private static $signatureSkipProperties = ['display', 'description'];
+    static private $signatureSkipProperties = array('display', 'description');
 
     protected $usageType;
     protected $display;
@@ -67,18 +52,13 @@ class Attachment implements ComparableInterface, VersionableInterface {
             $method = 'set' . ucfirst($k);
 
             if (! isset($this->$k)) {
-                $this->$method([]);
+                $this->$method(array());
             }
         }
     }
 
-    public function setUsageType($value) {
-        $this->usageType = $value;
-        return $this;
-    }
-    public function getUsageType() {
-        return $this->usageType;
-    }
+    public function setUsageType($value) { $this->usageType = $value; return $this; }
+    public function getUsageType() { return $this->usageType; }
 
     public function setDisplay($value) {
         if (! $value instanceof LanguageMap) {
@@ -89,9 +69,7 @@ class Attachment implements ComparableInterface, VersionableInterface {
 
         return $this;
     }
-    public function getDisplay() {
-        return $this->display;
-    }
+    public function getDisplay() { return $this->display; }
 
     public function setDescription($value) {
         if (! $value instanceof LanguageMap) {
@@ -102,38 +80,16 @@ class Attachment implements ComparableInterface, VersionableInterface {
 
         return $this;
     }
-    public function getDescription() {
-        return $this->description;
-    }
+    public function getDescription() { return $this->description; }
 
-    public function setContentType($value) {
-        $this->contentType = $value;
-        return $this;
-    }
-    public function getContentType() {
-        return $this->contentType;
-    }
-    public function setLength($value) {
-        $this->length = $value;
-        return $this;
-    }
-    public function getLength() {
-        return $this->length;
-    }
-    public function setSha2($value) {
-        $this->sha2 = $value;
-        return $this;
-    }
-    public function getSha2() {
-        return $this->sha2;
-    }
-    public function setFileUrl($value) {
-        $this->fileUrl = $value;
-        return $this;
-    }
-    public function getFileUrl() {
-        return $this->fileUrl;
-    }
+    public function setContentType($value) { $this->contentType = $value; return $this; }
+    public function getContentType() { return $this->contentType; }
+    public function setLength($value) { $this->length = $value; return $this; }
+    public function getLength() { return $this->length; }
+    public function setSha2($value) { $this->sha2 = $value; return $this; }
+    public function getSha2() { return $this->sha2; }
+    public function setFileUrl($value) { $this->fileUrl = $value; return $this; }
+    public function getFileUrl() { return $this->fileUrl; }
 
     public function setContent($value) {
         $this->_content = $value;
@@ -141,10 +97,6 @@ class Attachment implements ComparableInterface, VersionableInterface {
         $this->setSha2(hash("sha256", $value));
         return $this;
     }
-    public function getContent() {
-        return $this->_content;
-    }
-    public function hasContent() {
-        return isset($this->_content);
-    }
+    public function getContent() { return $this->_content; }
+    public function hasContent() { return isset($this->_content); }
 }

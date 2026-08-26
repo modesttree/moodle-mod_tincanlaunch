@@ -1,18 +1,4 @@
 <?php
-// This file is part of Moodle - https://moodle.org/
-//
-// Moodle is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// Moodle is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 /*
     Copyright 2014 Rustici Software
 
@@ -28,15 +14,14 @@
     See the License for the specific language governing permissions and
     limitations under the License.
 */
+
 namespace TinCan;
 
 use InvalidArgumentException;
 
-class Context implements ComparableInterface, VersionableInterface {
-    use ArraySetterTrait;
-    use FromJSONTrait;
-    use AsVersionTrait;
-    use SignatureComparisonTrait;
+class Context implements VersionableInterface, ComparableInterface
+{
+    use ArraySetterTrait, FromJSONTrait, AsVersionTrait, SignatureComparisonTrait;
 
     protected $registration;
     protected $instructor;
@@ -64,7 +49,7 @@ class Context implements ComparableInterface, VersionableInterface {
             $method = 'set' . ucfirst($k);
 
             if (! isset($this->$k)) {
-                $this->$method([]);
+                $this->$method(array());
             }
         }
     }
@@ -76,15 +61,14 @@ class Context implements ComparableInterface, VersionableInterface {
         $this->registration = $value;
         return $this;
     }
-    public function getRegistration() {
-        return $this->registration;
-    }
+    public function getRegistration() { return $this->registration; }
 
     public function setInstructor($value) {
         if (! ($value instanceof Agent || $value instanceof Group) && is_array($value)) {
             if (isset($value['objectType']) && $value['objectType'] === "Group") {
                 $value = new Group($value);
-            } else {
+            }
+            else {
                 $value = new Agent($value);
             }
         }
@@ -93,9 +77,7 @@ class Context implements ComparableInterface, VersionableInterface {
 
         return $this;
     }
-    public function getInstructor() {
-        return $this->instructor;
-    }
+    public function getInstructor() { return $this->instructor; }
 
     public function setTeam($value) {
         if (! $value instanceof Group && is_array($value)) {
@@ -106,9 +88,7 @@ class Context implements ComparableInterface, VersionableInterface {
 
         return $this;
     }
-    public function getTeam() {
-        return $this->team;
-    }
+    public function getTeam() { return $this->team; }
 
     public function setContextActivities($value) {
         if (! $value instanceof ContextActivities) {
@@ -119,31 +99,14 @@ class Context implements ComparableInterface, VersionableInterface {
 
         return $this;
     }
-    public function getContextActivities() {
-        return $this->contextActivities;
-    }
+    public function getContextActivities() { return $this->contextActivities; }
 
-    public function setRevision($value) {
-        $this->revision = $value;
-        return $this;
-    }
-    public function getRevision() {
-        return $this->revision;
-    }
-    public function setPlatform($value) {
-        $this->platform = $value;
-        return $this;
-    }
-    public function getPlatform() {
-        return $this->platform;
-    }
-    public function setLanguage($value) {
-        $this->language = $value;
-        return $this;
-    }
-    public function getLanguage() {
-        return $this->language;
-    }
+    public function setRevision($value) { $this->revision = $value; return $this; }
+    public function getRevision() { return $this->revision; }
+    public function setPlatform($value) { $this->platform = $value; return $this; }
+    public function getPlatform() { return $this->platform; }
+    public function setLanguage($value) { $this->language = $value; return $this; }
+    public function getLanguage() { return $this->language; }
 
     public function setStatement($value) {
         if (! $value instanceof StatementRef && is_array($value)) {
@@ -154,9 +117,7 @@ class Context implements ComparableInterface, VersionableInterface {
 
         return $this;
     }
-    public function getStatement() {
-        return $this->statement;
-    }
+    public function getStatement() { return $this->statement; }
 
     public function setExtensions($value) {
         if (! $value instanceof Extensions) {
@@ -167,7 +128,5 @@ class Context implements ComparableInterface, VersionableInterface {
 
         return $this;
     }
-    public function getExtensions() {
-        return $this->extensions;
-    }
+    public function getExtensions() { return $this->extensions; }
 }

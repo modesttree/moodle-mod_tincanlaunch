@@ -24,26 +24,30 @@
 
 namespace mod_tincanlaunch;
 
-// phpcs:ignore moodle.Files.RequireLogin.Missing -- require_login() is called in header.php.
-require_once(__DIR__ . '/../../config.php');
-require('header.php'); // Includes lib.php, locallib.php, params, and require_login().
+require_once("../../config.php");
+require('header.php');
+require_login();
 
 // Trigger module viewed event.
-$event = \mod_tincanlaunch\event\course_module_viewed::create([
+$event = \mod_tincanlaunch\event\course_module_viewed::create(array(
     'objectid' => $tincanlaunch->id,
     'context' => $context,
-]);
+));
 $event->add_record_snapshot('course', $course);
 $event->add_record_snapshot('tincanlaunch', $tincanlaunch);
 $event->add_record_snapshot('course_modules', $cm);
 $event->trigger();
 
 // Print the page header.
-$PAGE->set_url('/mod/tincanlaunch/view.php', ['id' => $cm->id]);
+$PAGE->set_url('/mod/tincanlaunch/view.php', array('id' => $cm->id));
 $PAGE->set_title(format_string($tincanlaunch->name));
 $PAGE->set_heading(format_string($course->fullname));
 $PAGE->set_context($context);
 echo $OUTPUT->header();
+
+// Completion requirements and activity dates are displayed automatically
+// in the activity page header since Moodle 4.3. The previously used
+// core_renderer::activity_information() method was removed in Moodle 5.0.
 
 if ($tincanlaunch->intro) { // Conditions to show the intro can change to look for own settings.
     echo $OUTPUT->box(
@@ -54,7 +58,7 @@ if ($tincanlaunch->intro) { // Conditions to show the intro can change to look f
 }
 
 $getregistrationdatafromlrsstate = tincanlaunch_get_global_parameters_and_get_state(
-    tincanlaunch_get_registration_key()
+    "http://tincanapi.co.uk/stateapikeys/registrations"
 );
 
 $statuscode = $getregistrationdatafromlrsstate->httpResponse['status'];
@@ -65,22 +69,25 @@ $newregistrationid = $tincanphputil->getUUID();
 
 // Evaluate the LRS status code.
 if ($statuscode != 200 && $statuscode != 404) { // Some error other than 404.
-    debugging("Error attempting to get registration data from State API. Status: " . $statuscode, DEBUG_DEVELOPER);
-    throw new \moodle_exception('tincanlaunch_notavailable', 'tincanlaunch');
+    echo $OUTPUT->notification(get_string('tincanlaunch_notavailable', 'tincanlaunch'), 'error');
+    debugging("<p>Error attempting to get registration data from State API.</p><pre>" .
+        print_r($getregistrationdatafromlrsstate, true) . "</pre>", DEBUG_DEVELOPER);
+    echo $OUTPUT->footer();
+    die();
 } else if ($statuscode == 200) { // Registration data found on LRS.
     $registrationdatafromlrs = json_decode($getregistrationdatafromlrsstate->content->getContent(), true);
     $simplifiedregid = '';
 
     foreach ($registrationdatafromlrs as $key => $item) {
+
         if (!is_array($registrationdatafromlrs[$key])) {
-            debugging("Expected array in registration data, found: " .
-                json_encode($registrationdatafromlrs[$key]), DEBUG_DEVELOPER);
-            throw new \moodle_exception('tincanlaunch_notavailable', 'tincanlaunch');
+            $reason = "Excepted array, found " . $registrationdatafromlrs[$key];
+            throw new \moodle_exception($reason, 'tincanlaunch', '', $warnings[$reason]);
         }
 
         array_push(
             $registrationdatafromlrs[$key],
-            "<a id='tincanrelaunch_attempt-" . $key . "'>"
+            "<a id='tincanrelaunch_attempt-".$key."'>"
             . get_string('tincanlaunchviewlaunchlink', 'tincanlaunch') . "</a>"
         );
 
@@ -96,7 +103,7 @@ if ($statuscode != 200 && $statuscode != 404) { // Some error other than 404.
         // For single registration, select the the most recent.
         if ($tincanlaunch->tincanmultipleregs == 0) {
             $simplifiedregid = $key;
-            $registrationdatafromlrs = [$registrationdatafromlrs[$key]];
+            $registrationdatafromlrs = array($registrationdatafromlrs[$key]);
             break;
         }
     }
@@ -107,19 +114,19 @@ if ($statuscode != 200 && $statuscode != 404) { // Some error other than 404.
         $table->id = 'tincanlaunch_attempttable';
 
         $table->caption = get_string('modulenameplural', 'tincanlaunch');
-        $table->head = [
+        $table->head = array(
             get_string('tincanlaunchviewfirstlaunched', 'tincanlaunch'),
             get_string('tincanlaunchviewlastlaunched', 'tincanlaunch'),
-            get_string('tincanlaunchviewlaunchlinkheader', 'tincanlaunch'),
-        ];
+            get_string('tincanlaunchviewlaunchlinkheader', 'tincanlaunch')
+        );
 
         $table->data = $registrationdatafromlrs;
         echo \html_writer::table($table);
 
         // Multiple registrations for standard launch navigation - Display new registration attempt link.
         if ($tincanlaunch->tincanmultipleregs == 1) {
-            echo '<div id=tincanlaunch_newattempt><a class="btn btn-primary" id=tincanlaunch_newattemptlink-' .
-                $newregistrationid . '>' . get_string('tincanlaunch_attempt', 'tincanlaunch') . '</a></div>';
+            echo '<div id=tincanlaunch_newattempt><a class="btn btn-primary" id=tincanlaunch_newattemptlink-'.
+                $newregistrationid .'>'. get_string('tincanlaunch_attempt', 'tincanlaunch') .'</a></div>';
         }
     } else { // Simplified Navigation
         // Utilize the simplified registration ID.
@@ -129,8 +136,8 @@ if ($statuscode != 200 && $statuscode != 404) { // Some error other than 404.
     if ($tincanlaunch->tincansimplelaunchnav == 1) {
         echo "<div id=tincanlaunch_simplified><a id=tincanlaunch_simplifiedlink-" . $newregistrationid . ">" . "</a></div>";
     } else {
-        echo '<div id=tincanlaunch_newattempt><a class="btn btn-primary" id=tincanlaunch_newattemptlink-'
-            . $newregistrationid . '>' . get_string('tincanlaunch_attempt', 'tincanlaunch') . '</a></div>';
+        echo '<div id=tincanlaunch_newattempt><a class="btn btn-primary" id=tincanlaunch_newattemptlink-'. $newregistrationid .'>'.
+        get_string('tincanlaunch_attempt', 'tincanlaunch') .'</a></div>';
     }
 }
 

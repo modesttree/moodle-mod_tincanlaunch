@@ -1,18 +1,4 @@
 <?php
-// This file is part of Moodle - https://moodle.org/
-//
-// Moodle is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// Moodle is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 /*
     Copyright 2014 Rustici Software
 
@@ -28,15 +14,14 @@
     See the License for the specific language governing permissions and
     limitations under the License.
 */
+
 namespace TinCan;
 
-class Verb implements ComparableInterface, VersionableInterface {
-    use ArraySetterTrait;
-    use FromJSONTrait;
-    use AsVersionTrait;
-    use SignatureComparisonTrait;
+class Verb implements VersionableInterface, ComparableInterface
+{
+    use ArraySetterTrait, FromJSONTrait, AsVersionTrait, SignatureComparisonTrait;
 
-    private static $signatureSkipProperties = ['display'];
+    static private $signatureSkipProperties = array('display');
 
     protected $id;
     protected $display;
@@ -49,18 +34,13 @@ class Verb implements ComparableInterface, VersionableInterface {
         }
 
         if (! isset($this->display)) {
-            $this->setDisplay([]);
+            $this->setDisplay(array());
         }
     }
 
     // FEATURE: check IRI?
-    public function setId($value) {
-        $this->id = $value;
-        return $this;
-    }
-    public function getId() {
-        return $this->id;
-    }
+    public function setId($value) { $this->id = $value; return $this; }
+    public function getId() { return $this->id; }
 
     public function setDisplay($value) {
         if (! $value instanceof LanguageMap) {
@@ -71,17 +51,15 @@ class Verb implements ComparableInterface, VersionableInterface {
 
         return $this;
     }
-    public function getDisplay() {
-        return $this->display;
-    }
+    public function getDisplay() { return $this->display; }
 
-    public static function Voided() {
+    static public function Voided() {
         return new self(
             [
                 'id' => 'http://adlnet.gov/expapi/verbs/voided',
                 'display' => [
-                    'en-US' => 'voided',
-                ],
+                    'en-US' => 'voided'
+                ]
             ]
         );
     }

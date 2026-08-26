@@ -44,11 +44,11 @@ if ($ADMIN->fulltree) {
         PARAM_URL
     ));
 
-    $options = [
+    $options = array(
         1 => get_string('tincanlaunchlrsauthentication_option_0', 'tincanlaunch'),
         2 => get_string('tincanlaunchlrsauthentication_option_1', 'tincanlaunch'),
-        0 => get_string('tincanlaunchlrsauthentication_option_2', 'tincanlaunch'),
-    ];
+        0 => get_string('tincanlaunchlrsauthentication_option_2', 'tincanlaunch')
+    );
     // Note the numbers above are deliberately mis-ordered for reasons of backwards compatibility with older settings.
 
     $setting = new admin_setting_configselect(
@@ -98,11 +98,13 @@ if ($ADMIN->fulltree) {
         1
     ));
 
+    // Default completion verb used when an activity does not set one itself.
     $settings->add(new admin_setting_configtext(
-        'tincanlaunch/tincanlaunchregistrationkey',
-        get_string('tincanlaunchregistrationkey', 'tincanlaunch'),
-        get_string('tincanlaunchregistrationkey_help', 'tincanlaunch'),
-        'http://tincanapi.co.uk/stateapikeys/registrations'
+        'tincanlaunch/tincanverbid',
+        get_string('tincanlaunchverbid', 'tincanlaunch'),
+        get_string('tincanlaunchverbid_help', 'tincanlaunch'),
+        'http://adlnet.gov/expapi/verbs/completed',
+        PARAM_TEXT
     ));
 
     $customfieldrecords = $DB->get_records('user_info_field');

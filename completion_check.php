@@ -35,7 +35,7 @@ if ($tincanlaunch->tincanexpiry > 0) {
     $possibleresult = COMPLETION_COMPLETE;
 }
 
-if ($completion->is_enabled($cm) && $tincanlaunch->tincanverbid) {
+if ($completion->is_enabled($cm) && tincanlaunch_get_completion_verb($tincanlaunch)) {
     // Query to get the cached completion state (if available).
     $oldstate = $completion->get_data($cm, false, 0);
 
@@ -48,14 +48,17 @@ if ($completion->is_enabled($cm) && $tincanlaunch->tincanverbid) {
         $newstate = $completion->get_data($cm, false, 0);
 
         if ($oldstate->completionstate !== $newstate->completionstate) {
+
             // Trigger Activity completed event.
-            $event = \mod_tincanlaunch\event\activity_completed::create([
+            $event = \mod_tincanlaunch\event\activity_completed::create(array(
                 'objectid' => $tincanlaunch->id,
                 'context' => $context,
-            ]);
+            ));
             $event->add_record_snapshot('course_modules', $cm);
             $event->add_record_snapshot('tincanlaunch', $tincanlaunch);
             $event->trigger();
         }
     }
+
+
 }
