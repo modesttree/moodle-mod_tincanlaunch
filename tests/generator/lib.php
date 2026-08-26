@@ -15,56 +15,79 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * mod_tincanlaunch data generator for testing.
+ * Data generator for mod_tincanlaunch.
  *
  * @package    mod_tincanlaunch
- * @copyright  2024 David Pesce <david.pesce@exputo.com>
+ * @category   test
+ * @copyright  2026 mod_tincanlaunch contributors
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+defined('MOODLE_INTERNAL') || die();
+
 /**
- * Data generator class for mod_tincanlaunch.
+ * tincanlaunch module data generator class.
  *
  * @package    mod_tincanlaunch
- * @copyright  2024 David Pesce <david.pesce@exputo.com>
+ * @category   test
+ * @copyright  2026 mod_tincanlaunch contributors
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class mod_tincanlaunch_generator extends testing_module_generator {
+
     /**
-     * Creates an instance of tincanlaunch for testing purposes.
+     * Create a new tincanlaunch module instance.
      *
      * @param array|stdClass|null $record Data for the module instance.
-     * @param array|null $options General options for course module.
-     * @return stdClass Record from the tincanlaunch table with the cmid field.
+     * @param array|null $options General options for creating the course module.
+     * @return stdClass The tincanlaunch instance record.
      */
-    public function create_instance($record = null, ?array $options = null) {
+    public function create_instance($record = null, $options = null) {
         $record = (object) (array) $record;
 
-        $defaultsettings = [
-            'tincanlaunchurl' => 'https://example.com/xapi-activity/index.html',
-            'tincanactivityid' => 'https://example.com/xapi-activity',
+        $defaults = [
+            'tincanlaunchurl' => 'https://example.com/content/launch.html',
+            'tincanactivityid' => 'https://example.com/activity/test-activity',
             'tincanverbid' => 'http://adlnet.gov/expapi/verbs/completed',
             'tincanexpiry' => 365,
             'overridedefaults' => 0,
             'tincanmultipleregs' => 1,
-            'tincanlaunchtype' => 1,
             'tincansimplelaunchnav' => 0,
-            'grade' => 0,
-            'tincanlaunchlrsendpoint' => 'https://lrs.example.com/endpoint/',
-            'tincanlaunchlrsauthentication' => 1,
-            'tincanlaunchlrslogin' => 'testkey',
-            'tincanlaunchlrspass' => 'testsecret',
-            'tincanlaunchlrsduration' => 9000,
-            'tincanlaunchcustomacchp' => '',
-            'tincanlaunchuseactoremail' => 1,
         ];
 
-        foreach ($defaultsettings as $name => $value) {
-            if (!isset($record->{$name})) {
-                $record->{$name} = $value;
+        foreach ($defaults as $field => $value) {
+            if (!isset($record->{$field})) {
+                $record->{$field} = $value;
             }
         }
 
-        return parent::create_instance($record, (array) $options);
+        // Ensure global LRS defaults exist for instances that do not override them.
+        $this->set_default_lrs_config();
+
+        return parent::create_instance($record, $options);
+    }
+
+    /**
+     * Ensure that the global LRS plugin config defaults are set.
+     *
+     * These mirror the defaults in settings.php so that instances using
+     * global settings have a valid (but non-routable) endpoint.
+     */
+    protected function set_default_lrs_config(): void {
+        $defaults = [
+            'tincanlaunchlrsendpoint' => 'https://lrs.example.com/xapi/',
+            'tincanlaunchlrsauthentication' => '1',
+            'tincanlaunchlrslogin' => 'login',
+            'tincanlaunchlrspass' => 'password',
+            'tincanlaunchlrsduration' => '9000',
+            'tincanlaunchcustomacchp' => 'https://moodle.example.com',
+            'tincanlaunchuseactoremail' => '1',
+        ];
+
+        foreach ($defaults as $name => $value) {
+            if (get_config('tincanlaunch', $name) === false) {
+                set_config($name, $value, 'tincanlaunch');
+            }
+        }
     }
 }

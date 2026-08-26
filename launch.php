@@ -24,15 +24,15 @@
 
 namespace mod_tincanlaunch;
 
-// phpcs:ignore moodle.Files.RequireLogin.Missing -- require_login() is called in header.php.
-require_once(__DIR__ . '/../../config.php');
-require('header.php'); // Includes lib.php, locallib.php, params, and require_login().
+require(__DIR__ . '/../../config.php');
+require_once('header.php');
+require_login();
 
 // Trigger Activity launched event.
-$event = \mod_tincanlaunch\event\activity_launched::create([
+$event = \mod_tincanlaunch\event\activity_launched::create(array(
     'objectid' => $tincanlaunch->id,
     'context' => $context,
-]);
+));
 $event->add_record_snapshot('course_modules', $cm);
 $event->add_record_snapshot('tincanlaunch', $tincanlaunch);
 $event->trigger();
@@ -41,20 +41,23 @@ $event->trigger();
 $registrationid = required_param('launchform_registration', PARAM_TEXT);
 
 if (empty($registrationid)) {
+    echo $OUTPUT->notification(get_string('tincanlaunch_regidempty', 'tincanlaunch'), 'error');
     debugging("Error attempting to get registration id querystring parameter.", DEBUG_DEVELOPER);
-    throw new \moodle_exception('tincanlaunch_regidempty', 'tincanlaunch');
+    die();
 }
 
 // Get record(s) of registration(s) from the LRS state API.
 $getregistrationdatafromlrsstate = tincanlaunch_get_global_parameters_and_get_state(
-    tincanlaunch_get_registration_key()
+    "http://tincanapi.co.uk/stateapikeys/registrations"
 );
 
 $lrsrespond = $getregistrationdatafromlrsstate->httpResponse['status'];
 // Failed to connect to LRS.
-if ($lrsrespond != 200 && $lrsrespond != 204 && $lrsrespond != 404) {
-    debugging("Error attempting to get registration data from State API. Status: " . $lrsrespond, DEBUG_DEVELOPER);
-    throw new \moodle_exception('tincanlaunch_notavailable', 'tincanlaunch');
+if ($lrsrespond != 200 && $lrsrespond != 404) {
+    echo $OUTPUT->notification(get_string('tincanlaunch_notavailable', 'tincanlaunch'), 'error');
+    debugging("<p>Error attempting to get registration data from State API.</p><pre>" .
+        var_dump($getregistrationdatafromlrsstate) . "</pre>", DEBUG_DEVELOPER);
+    die();
 }
 if ($lrsrespond == 200) {
     $registrationdata = json_decode($getregistrationdatafromlrsstate->content->getContent(), true);
@@ -65,14 +68,14 @@ $registrationdataetag = $getregistrationdatafromlrsstate->content->getEtag();
 
 $datenow = date("c");
 
-$registrationdataforthisattempt = [
-    $registrationid => [
+$registrationdataforthisattempt = array(
+    $registrationid => array(
         "created" => $datenow,
-        "lastlaunched" => $datenow,
-    ],
-];
+        "lastlaunched" => $datenow
+    )
+);
 
-// If registrationdata is null (could be from 204/404 above) create a new registration data array.
+// If registrationdata is null (could be from 404 above) create a new registration data array.
 if (is_null($registrationdata)) {
     $registrationdata = $registrationdataforthisattempt;
 } else if (array_key_exists($registrationid, $registrationdata)) {
@@ -87,18 +90,20 @@ uasort($registrationdata, function ($a, $b) {
     return strtotime($b['lastlaunched']) - strtotime($a['lastlaunched']);
 });
 
-// Note: Currently this is re-PUTting all of the data - it may be better just to POST the new data.
+// TODO: Currently this is re-PUTting all of the data - it may be better just to POST the new data.
 // This will prevent us sorting, but sorting could be done on output.
-$saveregistrationdata = tincanlaunch_get_global_parameters_and_save_state(
+$saveresgistrationdata = tincanlaunch_get_global_parameters_and_save_state(
     $registrationdata,
-    tincanlaunch_get_registration_key(),
+    "http://tincanapi.co.uk/stateapikeys/registrations",
     $registrationdataetag
 );
-$lrsrespond = $saveregistrationdata->httpResponse['status'];
+$lrsrespond = $saveresgistrationdata->httpResponse['status'];
 // Failed to connect to LRS.
 if ($lrsrespond != 204) {
-    debugging("Error attempting to set registration data to State API. Status: " . $lrsrespond, DEBUG_DEVELOPER);
-    throw new \moodle_exception('tincanlaunch_notavailable', 'tincanlaunch');
+    echo $OUTPUT->notification(get_string('tincanlaunch_notavailable', 'tincanlaunch'), 'error');
+    debugging("<p>Error attempting to set registration data to State API.</p><pre>" .
+        var_dump($saveresgistrationdata) . "</pre>", DEBUG_DEVELOPER);
+    die();
 }
 
 // Compile user data to send to agent profile.
@@ -124,10 +129,12 @@ foreach ($agentprofiles as $key => $value) {
     $lrsrespond = $saveagentprofile->httpResponse['status'];
     if ($lrsrespond != 204) {
         // Failed to connect to LRS.
-        debugging("Error attempting to set learner preferences (" . $key .
-            ") to Agent Profile API. Status: " . $lrsrespond, DEBUG_DEVELOPER);
-        throw new \moodle_exception('tincanlaunch_notavailable', 'tincanlaunch');
+        echo $OUTPUT->notification(get_string('tincanlaunch_notavailable', 'tincanlaunch'), 'error');
+        debugging("<p>Error attempting to set learner preferences (" . key($agentprofile) .
+            ") to Agent Profile API.</p><pre>" . var_dump($saveagentprofile) . "</pre>", DEBUG_DEVELOPER);
+        die();
     }
+
 }
 
 // Send launched statement.
@@ -136,8 +143,10 @@ $savelaunchedstatement = tincan_launched_statement($registrationid);
 $lrsrespond = $savelaunchedstatement->httpResponse['status'];
 if ($lrsrespond != 204) {
     // Failed to connect to LRS.
-    debugging("Error attempting to send 'launched' statement. Status: " . $lrsrespond, DEBUG_DEVELOPER);
-    throw new \moodle_exception('tincanlaunch_notavailable', 'tincanlaunch');
+    echo $OUTPUT->notification(get_string('tincanlaunch_notavailable', 'tincanlaunch'), 'error');
+    debugging("<p>Error attempting to send 'launched' statement.</p><pre>" .
+        var_dump($savelaunchedstatement) . "</pre>", DEBUG_DEVELOPER);
+    die();
 }
 
 // Set completion for module_viewed.

@@ -30,6 +30,7 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class restore_tincanlaunch_activity_structure_step extends restore_activity_structure_step {
+
     /**
      * Define the structure of the activity to be restored.
      *
@@ -37,7 +38,7 @@ class restore_tincanlaunch_activity_structure_step extends restore_activity_stru
      */
     protected function define_structure() {
 
-        $paths = [];
+        $paths = array();
 
         $paths[] = new restore_path_element('tincanlaunch', '/activity/tincanlaunch');
         $paths[] = new restore_path_element('tincanlaunchlrs', '/activity/tincanlaunch/tincanlaunchlrs');
@@ -82,18 +83,9 @@ class restore_tincanlaunch_activity_structure_step extends restore_activity_stru
      *
      */
     protected function after_execute() {
-        global $DB;
-
         // Add tincanlaunch related files.
         $this->add_related_files('mod_tincanlaunch', 'intro', null);
         $this->add_related_files('mod_tincanlaunch', 'package', null);
         $this->add_related_files('mod_tincanlaunch', 'content', null);
-
-        // Recreate the grade item if the activity has grading enabled.
-        $activityid = $this->task->get_activityid();
-        $tincanlaunch = $DB->get_record('tincanlaunch', ['id' => $activityid]);
-        if ($tincanlaunch) {
-            tincanlaunch_grade_item_update($tincanlaunch);
-        }
     }
 }

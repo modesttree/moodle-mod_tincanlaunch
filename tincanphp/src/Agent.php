@@ -1,18 +1,4 @@
 <?php
-// This file is part of Moodle - https://moodle.org/
-//
-// Moodle is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// Moodle is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 /*
     Copyright 2014 Rustici Software
 
@@ -28,12 +14,12 @@
     See the License for the specific language governing permissions and
     limitations under the License.
 */
+
 namespace TinCan;
 
-class Agent implements ComparableInterface, StatementTargetInterface, VersionableInterface {
-    use ArraySetterTrait;
-    use FromJSONTrait;
-
+class Agent implements VersionableInterface, StatementTargetInterface, ComparableInterface
+{
+    use ArraySetterTrait, FromJSONTrait;
     protected $objectType = 'Agent';
 
     protected $name;
@@ -51,9 +37,9 @@ class Agent implements ComparableInterface, StatementTargetInterface, Versionabl
     }
 
     public function asVersion($version) {
-        $result = [
-            'objectType' => $this->objectType,
-        ];
+        $result = array(
+            'objectType' => $this->objectType
+        );
 
         if (isset($this->name)) {
             $result['name'] = $this->name;
@@ -68,11 +54,14 @@ class Agent implements ComparableInterface, StatementTargetInterface, Versionabl
             if (! empty($versioned_acct)) {
                 $result['account'] = $versioned_acct;
             }
-        } else if (isset($this->mbox_sha1sum)) {
+        }
+        elseif (isset($this->mbox_sha1sum)) {
             $result['mbox_sha1sum'] = $this->mbox_sha1sum;
-        } else if (isset($this->mbox)) {
+        }
+        elseif (isset($this->mbox)) {
             $result['mbox'] = $this->mbox;
-        } else if (isset($this->openid)) {
+        }
+        elseif (isset($this->openid)) {
             $result['openid'] = $this->openid;
         }
 
@@ -100,53 +89,47 @@ class Agent implements ComparableInterface, StatementTargetInterface, Versionabl
         //
         if (isset($this->mbox) && isset($fromSig->mbox_sha1sum)) {
             if ($this->getMbox_sha1sum() === $fromSig->mbox_sha1sum) {
-                return ['success' => true, 'reason' => null];
+                return array('success' => true, 'reason' => null);
             }
 
-            return ['success' => false, 'reason' => 'Comparison of this.mbox to signature.mbox_sha1sum failed: no match'];
-        } else if (isset($fromSig->mbox) && isset($this->mbox_sha1sum)) {
+            return array('success' => false, 'reason' => 'Comparison of this.mbox to signature.mbox_sha1sum failed: no match');
+        }
+        elseif (isset($fromSig->mbox) && isset($this->mbox_sha1sum)) {
             if ($fromSig->getMbox_sha1sum() === $this->mbox_sha1sum) {
-                return ['success' => true, 'reason' => null];
+                return array('success' => true, 'reason' => null);
             }
 
-            return ['success' => false, 'reason' => 'Comparison of this.mbox_sha1sum to signature.mbox failed: no match'];
+            return array('success' => false, 'reason' => 'Comparison of this.mbox_sha1sum to signature.mbox failed: no match');
         }
 
-        foreach (['mbox', 'mbox_sha1sum', 'openid'] as $property) {
+        foreach (array('mbox', 'mbox_sha1sum', 'openid') as $property) {
             if (isset($this->$property) || isset($fromSig->$property)) {
                 if ($this->$property !== $fromSig->$property) {
-                    return ['success' => false, 'reason' => "Comparison of $property failed: value is not the same"];
+                    return array('success' => false, 'reason' => "Comparison of $property failed: value is not the same");
                 }
             }
         }
         if (isset($this->account) || isset($fromSig->account)) {
             if (! isset($fromSig->account)) {
-                return ['success' => false, 'reason' => "Comparison of account failed: value not in signature"];
+                return array('success' => false, 'reason' => "Comparison of account failed: value not in signature");
             }
             if (! isset($this->account)) {
-                return ['success' => false, 'reason' => "Comparison of account failed: value not in this"];
+                return array('success' => false, 'reason' => "Comparison of account failed: value not in this");
             }
 
             $acctResult = $this->account->compareWithSignature($fromSig->account);
             if (! $acctResult['success']) {
-                return ['success' => false, 'reason' => "Comparison of account failed: " . $acctResult['reason']];
+                return array('success' => false, 'reason' => "Comparison of account failed: " . $acctResult['reason']);
             }
         }
 
-        return ['success' => true, 'reason' => null];
+        return array('success' => true, 'reason' => null);
     }
 
-    public function getObjectType() {
-        return $this->objectType;
-    }
+    public function getObjectType() { return $this->objectType; }
 
-    public function setName($value) {
-        $this->name = $value;
-        return $this;
-    }
-    public function getName() {
-        return $this->name;
-    }
+    public function setName($value) { $this->name = $value; return $this; }
+    public function getName() { return $this->name; }
 
     public function setMbox($value) {
         if (isset($value) && (! (stripos($value, 'mailto:') === 0))) {
@@ -155,14 +138,9 @@ class Agent implements ComparableInterface, StatementTargetInterface, Versionabl
         $this->mbox = $value;
         return $this;
     }
-    public function getMbox() {
-        return $this->mbox;
-    }
+    public function getMbox() { return $this->mbox; }
 
-    public function setMbox_sha1sum($value) {
-        $this->mbox_sha1sum = $value;
-        return $this;
-    }
+    public function setMbox_sha1sum($value) { $this->mbox_sha1sum = $value; return $this; }
     public function getMbox_sha1sum() {
         if (isset($this->mbox_sha1sum)) {
             return $this->mbox_sha1sum;
@@ -172,13 +150,8 @@ class Agent implements ComparableInterface, StatementTargetInterface, Versionabl
             return sha1($this->mbox);
         }
     }
-    public function setOpenid($value) {
-        $this->openid = $value;
-        return $this;
-    }
-    public function getOpenid() {
-        return $this->openid;
-    }
+    public function setOpenid($value) { $this->openid = $value; return $this; }
+    public function getOpenid() { return $this->openid; }
 
     public function setAccount($value) {
         if (! $value instanceof AgentAccount && is_array($value)) {
@@ -189,7 +162,5 @@ class Agent implements ComparableInterface, StatementTargetInterface, Versionabl
 
         return $this;
     }
-    public function getAccount() {
-        return $this->account;
-    }
+    public function getAccount() { return $this->account; }
 }

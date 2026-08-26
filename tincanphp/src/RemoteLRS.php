@@ -1,18 +1,4 @@
 <?php
-// This file is part of Moodle - https://moodle.org/
-//
-// Moodle is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// Moodle is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 /*
     Copyright 2014 Rustici Software
 
@@ -28,26 +14,34 @@
     See the License for the specific language governing permissions and
     limitations under the License.
 */
+
 namespace TinCan;
+
+// Ensure Moodle's curl transport class (lib/filelib.php) is available.
+if (defined('MOODLE_INTERNAL') && !class_exists('\curl')) {
+    global $CFG;
+    require_once($CFG->libdir . '/filelib.php');
+}
 
 class RemoteLRS implements LRSInterface
 {
     use ArraySetterTrait;
 
-    private static $whitelistedHeaders = [
+    private static $whitelistedHeaders = array(
         'Content-Type'                        => 'contentType',
         'Date'                                => 'date',
         'Last-Modified'                       => 'lastModified',
         'Etag'                                => 'etag',
         'X-Experience-API-Consistent-Through' => 'apiConsistentThrough',
         'X-Experience-API-Version'            => 'apiVersion',
-    ];
+    );
     protected $endpoint;
     protected $version;
     protected $auth;
     protected $proxy;
     protected $headers;
     protected $extended;
+    protected $timeout = 30;
 
     public function __construct() {
         $_num_args = func_num_args();
@@ -62,21 +56,24 @@ class RemoteLRS implements LRSInterface
             if (! isset($this->auth) && isset($arg['username']) && isset($arg['password'])) {
                 $this->setAuth($arg['username'], $arg['password']);
             }
-        } else if ($_num_args === 3) {
+        }
+        elseif ($_num_args === 3) {
             $this->setEndpoint(func_get_arg(0));
             $this->setVersion(func_get_arg(1));
             $this->setAuth(func_get_arg(2));
-        } else if ($_num_args === 4) {
+        }
+        elseif ($_num_args === 4) {
             $this->setEndpoint(func_get_arg(0));
             $this->setVersion(func_get_arg(1));
             $this->setAuth(func_get_arg(2), func_get_arg(3));
-        } else {
+        }
+        else {
             $this->setVersion(Version::latest());
         }
     }
 
     protected function sendRequest($method, $resource) {
-        $options = func_num_args() === 3 ? func_get_arg(2) : [];
+        $options = func_num_args() === 3 ? func_get_arg(2) : array();
 
         //
         // allow for full path requests, for instance as used by the
@@ -87,7 +84,7 @@ class RemoteLRS implements LRSInterface
         if (! preg_match('/^http/', $resource)) {
             $url = $this->endpoint . $resource;
         }
-        $http = [
+        $http = array(
             //
             // redirects are not part of the spec so LRSs shouldn't be returning them
             //
@@ -104,11 +101,14 @@ class RemoteLRS implements LRSInterface
             //
             'ignore_errors' => true,
 
+            // Fail after a bounded time rather than hanging the PHP request indefinitely.
+            'timeout' => $this->timeout,
+
             'method' => $method,
-            'header' => [
-                'X-Experience-API-Version: ' . $this->version,
-            ],
-        ];
+            'header' => array(
+                'X-Experience-API-Version: ' . $this->version
+            ),
+        );
         if (isset($this->auth)) {
             array_push($http['header'], 'Authorization: ' . $this->auth);
         }
@@ -140,83 +140,120 @@ class RemoteLRS implements LRSInterface
 
         $success = false;
 
+        // Use Moodle's curl class for the transport. Unlike PHP's HTTP stream wrapper,
+        // cURL enforces both connection and total timeouts reliably on all platforms,
+        // and it respects Moodle's configured web proxy settings. This prevents an
+        // unreachable or slow LRS from hanging the PHP request indefinitely.
         //
-        // errors from fopen are reported to PHP as E_WARNING which prevents us
-        // from getting a reasonable message, so set an error handler here for
-        // the immediate call to turn it into an exception, and then restore
-        // normal handling
-        //
-        set_error_handler(
-            function ($errno, $errstr, $errfile, $errline, array $errcontext) {
-                // "!== false" is intentional. strpos() can return 0, which is falsey, but returning
-                // 0 matches our "true" condition. Using strict equality to avoid that confusion.
-                if ($errno == E_NOTICE && strpos($errstr, 'Array to string conversion') !== false) {
-                    // The way HHVM handles array comparison results in a Notice being raised in fopen(),
-                    // but that's expected here and won't affect functionality. We don't want to throw
-                    // those Notices as Errors. Checking if this is a Notice before looking at the
-                    // contents of the string to hopefully minimize any performance impact here.
-                    // See https://github.com/facebook/hhvm/issues/1561 for the "won't fix" from HHVM.
+        // 'ignoresecurity' is required: the LRS endpoint is explicitly configured by
+        // the site admin / activity settings, and xAPI servers legitimately run on
+        // non-standard ports and internal hosts that Moodle's curl security helper
+        // would otherwise block.
+        $curl = new \curl(array('ignoresecurity' => true));
+        $curl->setopt(array(
+            'CURLOPT_CONNECTTIMEOUT' => 10,
+            'CURLOPT_TIMEOUT' => $this->timeout,
+            // Redirects are not part of the xAPI spec, so the LRS should not return them.
+            // Disable both cURL-level and Moodle-level redirect following.
+            'CURLOPT_FOLLOWLOCATION' => false,
+            'CURLOPT_MAXREDIRS' => 0,
+            'CURLOPT_RETURNTRANSFER' => true,
+        ));
+        $curl->emulateredirects = false;
 
-                    return true;
-                }
+        $headers = $http['header'];
+        if (($method === 'PUT' || $method === 'POST') && isset($http['content'])) {
+            // Content-length is handled by cURL automatically.
+            $headers = array_filter($headers, function ($header) {
+                return stripos($header, 'Content-length:') !== 0;
+            });
+        }
+        $curl->setHeader(array_values($headers));
 
-                throw new \ErrorException($errstr, 0, $errno, $errfile, $errline);
-            }
-        );
-
-        $fp = null;
         $response = null;
+        $content = '';
 
-        try {
-            $context = stream_context_create([ 'http' => $http ]);
-            $fp = fopen($url, 'rb', false, $context);
-
-            if (! $fp) {
-                $content = "Request failed: $php_errormsg";
-            }
-        } catch (\ErrorException $ex) {
-            $content = "Request failed: $ex";
+        $body = isset($http['content']) ? $http['content'] : '';
+        $requestoptions = array();
+        switch ($method) {
+            case 'GET':
+                $rawresponse = $curl->get($url, array(), $requestoptions);
+                break;
+            case 'POST':
+                $rawresponse = $curl->post($url, $body, $requestoptions);
+                break;
+            case 'PUT':
+                $rawresponse = $curl->put($url, $body, $requestoptions);
+                break;
+            case 'DELETE':
+                $rawresponse = $curl->delete($url, array(), $requestoptions);
+                break;
+            default:
+                $requestoptions['CURLOPT_CUSTOMREQUEST'] = $method;
+                $rawresponse = $curl->get($url, array(), $requestoptions);
+                break;
         }
 
-        restore_error_handler();
+        $curlerrno = $curl->get_errno();
+        $curlinfo = $curl->get_info();
 
-        if ($fp) {
-            $metadata = stream_get_meta_data($fp);
-            $content  = stream_get_contents($fp);
+        if ($curlerrno !== 0 || empty($curlinfo['http_code'])) {
+            // Transport-level failure (timeout, DNS, connection refused, blocked, etc).
+            $content = "Request failed: " . $curl->error;
+        } else {
+            $statuscode = (int) $curlinfo['http_code'];
 
-            $response = $this->_parseMetadata($metadata, $options);
+            // Convert the raw response header lines into the same metadata
+            // structure the stream wrapper produced, then reuse the existing
+            // parser so whitelisted headers (etag, contentType, etc.) are mapped
+            // exactly as before.
+            $wrapperdata = $curl->get_raw_response();
+            array_unshift($wrapperdata, 'HTTP/1.1 ' . $statuscode);
+            $response = $this->_parseMetadata(array('wrapper_data' => $wrapperdata));
+            $response['status'] = $statuscode;
+            $response['_content'] = $rawresponse;
+            $response['_metadata'] = array('wrapper_data' => $wrapperdata);
 
-            //
-            // keep a copy of the raw content, the methods expecting
-            // an LRS response may handle the content, for instance
-            // querying statements takes the returned value and converts
-            // it to Statement objects (really StatementsResult but who
-            // is counting), etc. but a user may want the original raw
-            // returned content untouched, do the same with the metadata
-            // because it feels like a good practice
-            //
-            $response['_content']  = $content;
-            $response['_metadata'] = $metadata;
+            $content = $rawresponse;
 
-            //
-            // Content-Type won't be set in the case of a 204 (and potentially others)
-            //
             if (isset($response['headers']['contentType']) && $response['headers']['contentType'] === "multipart/mixed") {
                 $content = $this->_parseMultipart($response['headers']['contentTypeBoundary'], $content);
             }
 
-            if (($response['status'] >= 200 && $response['status'] < 300) || ($response['status'] === 404 && isset($options['ignore404']) && $options['ignore404'])) {
+            if ($statuscode >= 200 && $statuscode < 300) {
                 $success = true;
-            } else if ($response['status'] >= 300 && $response['status'] < 400) {
-                $content = "Unsupported status code: " . $response['status'] . " (LRS should not redirect)";
+            } else if ($statuscode === 404 && isset($options['ignore404']) && $options['ignore404']) {
+                $success = true;
+            } else if ($statuscode >= 300 && $statuscode < 400) {
+                $content = "Unsupported status code: " . $statuscode . " (LRS should not redirect)";
             }
         }
 
         return new LRSResponse($success, $content, $response);
     }
 
+    /**
+     * Set the HTTP request timeout in seconds.
+     *
+     * @param int|float $seconds Timeout in seconds.
+     * @return $this
+     */
+    public function setTimeout($seconds) {
+        $this->timeout = $seconds;
+        return $this;
+    }
+
+    /**
+     * Get the HTTP request timeout in seconds.
+     *
+     * @return int|float
+     */
+    public function getTimeout() {
+        return $this->timeout;
+    }
+
     private function _parseMetadata($metadata) {
-        $result = [];
+        $result = array();
 
         // simulate a 100 Continue to cause our loop
         // to run until it sets something other than a 100
@@ -248,7 +285,8 @@ class RemoteLRS implements LRSInterface
                 $pair = array_map('trim', explode("=", $contentType_parts[$i], 2));
                 if ($pair[0] === 'charset') {
                     $result['headers']['contentTypeCharset'] = $pair[1];
-                } else if ($pair[0] === 'boundary') {
+                }
+                elseif ($pair[0] === 'boundary') {
                     $result['headers']['contentTypeBoundary'] = $pair[1];
                 }
             }
@@ -258,16 +296,17 @@ class RemoteLRS implements LRSInterface
     }
 
     private function _parseMultipart($boundary, $content) {
-        $parts = [];
+        $parts = array();
 
         foreach (explode("--$boundary", $content) as $part) {
             $part = ltrim($part, "\r\n");
             if ($part === '') {
                 continue;
-            } else if ($part === '--') {
+            }
+            elseif ($part === '--') {
                 break;
             }
-            [$header, $body] = explode("\r\n\r\n", $part, 2);
+            list($header, $body) = explode("\r\n\r\n", $part, 2);
 
             //
             // the body has a CRLF on it before the boundary per the RFC
@@ -280,10 +319,10 @@ class RemoteLRS implements LRSInterface
 
             array_push(
                 $parts,
-                [
+                array(
                     'headers' => $this->_parseHeaders($header),
-                    'body'    => $body,
-                ]
+                    'body'    => $body
+                )
             );
         }
 
@@ -299,33 +338,36 @@ class RemoteLRS implements LRSInterface
     // adapted to private method, and force headers to lowercase for easy detection
     //
     private function _parseHeaders($raw_headers) {
-        $headers = [];
+        $headers = array();
         $key = ''; // [+]
 
-        foreach (explode("\n", $raw_headers) as $i => $h) {
+        foreach(explode("\n", $raw_headers) as $i => $h) {
             $h = explode(':', $h, 2);
             $h[0] = strtolower($h[0]);
 
             if (isset($h[1])) {
                 if (! isset($headers[$h[0]])) {
                     $headers[$h[0]] = trim($h[1]);
-                } else if (is_array($headers[$h[0]])) {
+                }
+                elseif (is_array($headers[$h[0]])) {
                     // $tmp = array_merge($headers[$h[0]], array(trim($h[1]))); // [-]
                     // $headers[$h[0]] = $tmp; // [-]
-                    $headers[$h[0]] = array_merge($headers[$h[0]], [trim($h[1])]); // [+]
-                } else {
+                    $headers[$h[0]] = array_merge($headers[$h[0]], array(trim($h[1]))); // [+]
+                }
+                else {
                     // $tmp = array_merge(array($headers[$h[0]]), array(trim($h[1]))); // [-]
                     // $headers[$h[0]] = $tmp; // [-]
-                    $headers[$h[0]] = array_merge([$headers[$h[0]]], [trim($h[1])]); // [+]
+                    $headers[$h[0]] = array_merge(array($headers[$h[0]]), array(trim($h[1]))); // [+]
                 }
 
                 $key = $h[0]; // [+]
-            } else { // [+]
+            }
+            else { // [+]
                 if (substr($h[0], 0, 1) == "\t") {// [+]
-                    $headers[$key] .= "\r\n\t" . trim($h[0]); // [+]
-                } else if (! $key) {// [+]
-                    $headers[0] = trim($h[0]);
-                    trim($h[0]); // [+]
+                    $headers[$key] .= "\r\n\t".trim($h[0]); // [+]
+                }
+                elseif (! $key) {// [+]
+                    $headers[0] = trim($h[0]);trim($h[0]); // [+]
                 }
             } // [+]
         }
@@ -373,12 +415,12 @@ class RemoteLRS implements LRSInterface
             $statement = new Statement($statement);
         }
 
-        $requestCfg = [
-            'headers' => [
-                'Content-Type' => 'application/json',
-            ],
-            'content' => json_encode($statement->asVersion($this->version), JSON_UNESCAPED_SLASHES),
-        ];
+        $requestCfg = array(
+            'headers' => array(
+                'Content-Type' => 'application/json'
+            ),
+            'content' => json_encode($statement->asVersion($this->version), JSON_UNESCAPED_SLASHES)
+        );
 
         if ($statement->hasAttachmentsWithContent()) {
             $this->_buildAttachmentContent($requestCfg, $statement->getAttachments());
@@ -387,7 +429,7 @@ class RemoteLRS implements LRSInterface
         $method = 'POST';
         if ($statement->hasId()) {
             $method = 'PUT';
-            $requestCfg['params'] = ['statementId' => $statement->getId()];
+            $requestCfg['params'] = array('statementId' => $statement->getId());
         }
 
         $response = $this->sendRequest($method, 'statements', $requestCfg);
@@ -413,8 +455,8 @@ class RemoteLRS implements LRSInterface
     }
 
     public function saveStatements($statements) {
-        $versioned_statements = [];
-        $attachments_map = [];
+        $versioned_statements = array();
+        $attachments_map = array();
         foreach ($statements as $i => $st) {
             if (! $st instanceof Statement) {
                 $st = new Statement($st);
@@ -431,12 +473,12 @@ class RemoteLRS implements LRSInterface
             }
         }
 
-        $requestCfg = [
-            'headers' => [
-                'Content-Type' => 'application/json',
-            ],
+        $requestCfg = array(
+            'headers' => array(
+                'Content-Type' => 'application/json'
+            ),
             'content' => json_encode($versioned_statements, JSON_UNESCAPED_SLASHES),
-        ];
+        );
         if (! empty($attachments_map)) {
             $this->_buildAttachmentContent($requestCfg, array_values($attachments_map));
         }
@@ -455,7 +497,7 @@ class RemoteLRS implements LRSInterface
         return $response;
     }
 
-    public function retrieveStatement($id, $options = []) {
+    public function retrieveStatement($id, $options = array()) {
         if (! isset($options['voided'])) {
             $options['voided'] = false;
         }
@@ -463,10 +505,11 @@ class RemoteLRS implements LRSInterface
             $options['attachments'] = false;
         }
 
-        $params = [];
+        $params = array();
         if ($options['voided']) {
             $params['voidedStatementId'] = $id;
-        } else {
+        }
+        else {
             $params['statementId'] = $id;
         }
         if ($options['attachments']) {
@@ -476,9 +519,9 @@ class RemoteLRS implements LRSInterface
         $response = $this->sendRequest(
             'GET',
             'statements',
-            [
-                'params' => $params,
-            ]
+            array(
+                'params' => $params
+            )
         );
 
         if ($response->success) {
@@ -487,7 +530,7 @@ class RemoteLRS implements LRSInterface
 
                 $response->content = Statement::FromJSON($orig[0]['body']);
 
-                $attachmentsByHash = [];
+                $attachmentsByHash = array();
                 for ($i = 1; $i < count($orig); $i++) {
                     $attachmentsByHash[$orig[$i]['headers']['x-experience-api-hash']] = $orig[$i];
                 }
@@ -497,7 +540,8 @@ class RemoteLRS implements LRSInterface
                         $attachment->setContent($attachmentsByHash[$attachment->getSha2()]['body']);
                     }
                 }
-            } else {
+            }
+            else {
                 $response->content = Statement::FromJSON($response->content);
             }
         }
@@ -505,53 +549,54 @@ class RemoteLRS implements LRSInterface
         return $response;
     }
 
-    public function retrieveVoidedStatement($id, $options = []) {
+    public function retrieveVoidedStatement($id, $options = array()) {
         $options['voided'] = true;
         return $this->retrieveStatement($id, $options);
     }
 
     private function _queryStatementsRequestParams($query) {
-        $result = [];
+        $result = array();
 
-        foreach (['agent'] as $k) {
+        foreach (array('agent') as $k) {
             if (isset($query[$k])) {
                 $result[$k] = json_encode($query[$k]->asVersion($this->version));
             }
         }
         foreach (
-            [
+            array(
                 'verb',
                 'activity',
-            ] as $k
+            ) as $k
         ) {
             if (isset($query[$k])) {
                 if (is_string($query[$k])) {
                     $result[$k] = $query[$k];
-                } else {
+                }
+                else {
                     $result[$k] = $query[$k]->getId();
                 }
             }
         }
         foreach (
-            [
+            array(
                 'ascending',
                 'related_activities',
                 'related_agents',
                 'attachments',
-            ] as $k
+            ) as $k
         ) {
             if (isset($query[$k])) {
                 $result[$k] = $query[$k] ? 'true' : 'false';
             }
         }
         foreach (
-            [
+            array(
                 'registration',
                 'since',
                 'until',
                 'limit',
                 'format',
-            ] as $k
+            ) as $k
         ) {
             if (isset($query[$k])) {
                 $result[$k] = $query[$k];
@@ -567,7 +612,7 @@ class RemoteLRS implements LRSInterface
 
             $response->content = StatementsResult::FromJSON($orig[0]['body']);
 
-            $attachmentsByHash = [];
+            $attachmentsByHash = array();
             for ($i = 1; $i < count($orig); $i++) {
                 $attachmentsByHash[$orig[$i]['headers']['x-experience-api-hash']] = $orig[$i];
             }
@@ -589,9 +634,9 @@ class RemoteLRS implements LRSInterface
     }
 
     public function queryStatements($query) {
-        $requestCfg = [
+        $requestCfg = array(
             'params' => $this->_queryStatementsRequestParams($query),
-        ];
+        );
         if (func_num_args() > 1) {
             $options = func_get_arg(1);
 
@@ -634,12 +679,12 @@ class RemoteLRS implements LRSInterface
             $agent = new Agent($agent);
         }
 
-        $requestCfg = [
-            'params' => [
+        $requestCfg = array(
+            'params' => array(
                 'activityId' => $activity->getId(),
                 'agent'      => json_encode($agent->asVersion($this->version)),
-            ],
-        ];
+            ),
+        );
         if (func_num_args() > 2) {
             $options = func_get_arg(2);
             if (isset($options)) {
@@ -670,14 +715,14 @@ class RemoteLRS implements LRSInterface
         }
         $registration = null;
 
-        $requestCfg = [
-            'params' => [
+        $requestCfg = array(
+            'params' => array(
                 'activityId' => $activity->getId(),
                 'agent'      => json_encode($agent->asVersion($this->version)),
                 'stateId'    => $id,
-            ],
+            ),
             'ignore404' => true,
-        ];
+        );
         if (func_num_args() > 3) {
             $options = func_get_arg(3);
             if (isset($options)) {
@@ -691,12 +736,12 @@ class RemoteLRS implements LRSInterface
 
         if ($response->success) {
             $doc = new State(
-                [
+                array(
                     'id'       => $id,
                     'content'  => $response->content,
                     'activity' => $activity,
                     'agent'    => $agent,
-                ]
+                )
             );
             if (isset($registration)) {
                 $doc->setRegistration($registration);
@@ -727,17 +772,17 @@ class RemoteLRS implements LRSInterface
 
         $contentType = 'application/octet-stream';
 
-        $requestCfg = [
-            'headers' => [
+        $requestCfg = array(
+            'headers' => array(
                 'Content-Type' => $contentType,
-            ],
-            'params' => [
+            ),
+            'params' => array(
                 'activityId' => $activity->getId(),
                 'agent'      => json_encode($agent->asVersion($this->version)),
                 'stateId'    => $id,
-            ],
+            ),
             'content' => $content,
-        ];
+        );
         $registration = null;
         if (func_num_args() > 4) {
             $options = func_get_arg(4);
@@ -758,14 +803,14 @@ class RemoteLRS implements LRSInterface
 
         if ($response->success) {
             $doc = new State(
-                [
+                array(
                     'id'          => $id,
                     'content'     => $content,
                     'contentType' => $contentType,
                     'etag'        => sha1($content),
                     'activity'    => $activity,
                     'agent'       => $agent,
-                ]
+                )
             );
             if (isset($registration)) {
                 $doc->setRegistration($registration);
@@ -797,12 +842,12 @@ class RemoteLRS implements LRSInterface
             $agent = new Agent($agent);
         }
 
-        $requestCfg = [
-            'params' => [
+        $requestCfg = array(
+            'params' => array(
                 'activityId' => $activity->getId(),
                 'agent'      => json_encode($agent->asVersion($this->version)),
-            ],
-        ];
+            )
+        );
         if (isset($id)) {
             $requestCfg['params']['stateId'] = $id;
         }
@@ -822,18 +867,18 @@ class RemoteLRS implements LRSInterface
     }
 
     public function deleteState($activity, $agent, $id) {
-        return call_user_func_array([$this, '_deleteState'], func_get_args());
+        return call_user_func_array(array($this, '_deleteState'), func_get_args());
     }
 
     public function clearState($activity, $agent) {
-        $args = [$activity, $agent, null];
+        $args = array($activity, $agent, null);
 
         $numArgs = func_num_args();
         if ($numArgs > 2) {
             $args = array_merge($args, array_slice(func_get_args(), 2));
         }
 
-        return call_user_func_array([$this, '_deleteState'], $args);
+        return call_user_func_array(array($this, '_deleteState'), $args);
     }
 
     public function retrieveActivityProfileIds($activity) {
@@ -841,11 +886,11 @@ class RemoteLRS implements LRSInterface
             $activity = new Activity($activity);
         }
 
-        $requestCfg = [
-            'params' => [
-                'activityId' => $activity->getId(),
-            ],
-        ];
+        $requestCfg = array(
+            'params' => array(
+                'activityId' => $activity->getId()
+            )
+        );
         if (func_num_args() > 1) {
             $options = func_get_arg(1);
             if (isset($options)) {
@@ -871,22 +916,22 @@ class RemoteLRS implements LRSInterface
         $response = $this->sendRequest(
             'GET',
             'activities/profile',
-            [
-                'params' => [
+            array(
+                'params' => array(
                     'activityId' => $activity->getId(),
                     'profileId'  => $id,
-                ],
+                ),
                 'ignore404' => true,
-            ]
+            )
         );
 
         if ($response->success) {
             $doc = new ActivityProfile(
-                [
+                array(
                     'id'       => $id,
                     'content'  => $response->content,
                     'activity' => $activity,
-                ]
+                )
             );
             if (isset($response->httpResponse['headers']['lastModified'])) {
                 $doc->setTimestamp($response->httpResponse['headers']['lastModified']);
@@ -911,16 +956,16 @@ class RemoteLRS implements LRSInterface
 
         $contentType = 'application/octet-stream';
 
-        $requestCfg = [
-            'headers' => [
+        $requestCfg = array(
+            'headers' => array(
                 'Content-Type' => $contentType,
-            ],
-            'params' => [
+            ),
+            'params' => array(
                 'activityId' => $activity->getId(),
                 'profileId'  => $id,
-            ],
+            ),
             'content' => $content,
-        ];
+        );
         if (func_num_args() > 3) {
             $options = func_get_arg(3);
             if (isset($options)) {
@@ -929,7 +974,8 @@ class RemoteLRS implements LRSInterface
                 }
                 if (isset($options['etag'])) {
                     $requestCfg['headers']['If-Match'] = $options['etag'];
-                } else {
+                }
+                else {
                     $requestCfg['headers']['If-None-Match'] = '*';
                 }
             }
@@ -939,13 +985,13 @@ class RemoteLRS implements LRSInterface
 
         if ($response->success) {
             $doc = new ActivityProfile(
-                [
+                array(
                     'id'          => $id,
                     'content'     => $content,
                     'contentType' => $contentType,
                     'etag'        => sha1($content),
                     'activity'    => $activity,
-                ]
+                )
             );
             if (isset($response->httpResponse['headers']['date'])) {
                 $doc->setTimestamp($response->httpResponse['headers']['date']);
@@ -965,32 +1011,32 @@ class RemoteLRS implements LRSInterface
         $response = $this->sendRequest(
             'DELETE',
             'activities/profile',
-            [
-                'params' => [
+            array(
+                'params' => array(
                     'activityId' => $activity->getId(),
                     'profileId'  => $id,
-                ],
-            ]
+                ),
+            )
         );
 
         return $response;
     }
 
     public function retrieveActivity($activityid) {
-        $headers = ['Accept-language: *'];
+        $headers = array('Accept-language: *');
         if (isset($_SERVER['HTTP_ACCEPT_LANGUAGE'])) {
-            $headers = ['Accept-language: ' . $_SERVER['HTTP_ACCEPT_LANGUAGE'] . ', *'];
+            $headers = array('Accept-language: ' . $_SERVER['HTTP_ACCEPT_LANGUAGE'] . ', *');
         }
 
         $response = $this->sendRequest(
             'GET',
             'activities',
-            [
-                'params' => [
+            array(
+                'params' => array(
                     'activityId' => $activityid,
-                ],
-                'headers' => $headers,
-            ]
+                ),
+                'headers' => $headers
+            )
         );
 
         if ($response->success) {
@@ -1006,11 +1052,11 @@ class RemoteLRS implements LRSInterface
             $agent = new Agent($agent);
         }
 
-        $requestCfg = [
-            'params' => [
-                'agent' => json_encode($agent->asVersion($this->version)),
-            ],
-        ];
+        $requestCfg = array(
+            'params' => array(
+                'agent' => json_encode($agent->asVersion($this->version))
+            )
+        );
         if (func_num_args() > 1) {
             $options = func_get_arg(1);
             if (isset($options)) {
@@ -1036,22 +1082,22 @@ class RemoteLRS implements LRSInterface
         $response = $this->sendRequest(
             'GET',
             'agents/profile',
-            [
-                'params' => [
+            array(
+                'params' => array(
                     'agent'     => json_encode($agent->asVersion($this->version)),
                     'profileId' => $id,
-                ],
+                ),
                 'ignore404' => true,
-            ]
+            )
         );
 
         if ($response->success) {
             $doc = new AgentProfile(
-                [
+                array(
                     'id'      => $id,
                     'content' => $response->content,
                     'agent'   => $agent,
-                ]
+                )
             );
             if (isset($response->httpResponse['headers']['lastModified'])) {
                 $doc->setTimestamp($response->httpResponse['headers']['lastModified']);
@@ -1076,16 +1122,16 @@ class RemoteLRS implements LRSInterface
 
         $contentType = 'application/octet-stream';
 
-        $requestCfg = [
-            'headers' => [
+        $requestCfg = array(
+            'headers' => array(
                 'Content-Type' => $contentType,
-            ],
-            'params' => [
+            ),
+            'params' => array(
                 'agent'     => json_encode($agent->asVersion($this->version)),
                 'profileId' => $id,
-            ],
+            ),
             'content' => $content,
-        ];
+        );
         if (func_num_args() > 3) {
             $options = func_get_arg(3);
             if (isset($options)) {
@@ -1094,7 +1140,8 @@ class RemoteLRS implements LRSInterface
                 }
                 if (isset($options['etag'])) {
                     $requestCfg['headers']['If-Match'] = $options['etag'];
-                } else {
+                }
+                else {
                     $requestCfg['headers']['If-None-Match'] = '*';
                 }
             }
@@ -1104,13 +1151,13 @@ class RemoteLRS implements LRSInterface
 
         if ($response->success) {
             $doc = new AgentProfile(
-                [
+                array(
                     'id' => $id,
                     'content' => $content,
                     'contentType' => $contentType,
                     'etag' => sha1($content),
                     'agent' => $agent,
-                ]
+                )
             );
             if (isset($response->httpResponse['headers']['date'])) {
                 $doc->setTimestamp($response->httpResponse['headers']['date']);
@@ -1130,12 +1177,12 @@ class RemoteLRS implements LRSInterface
         $response = $this->sendRequest(
             'DELETE',
             'agents/profile',
-            [
-                'params' => [
+            array(
+                'params' => array(
                     'agent'     => json_encode($agent->asVersion($this->version)),
                     'profileId' => $id,
-                ],
-            ]
+                ),
+            )
         );
 
         return $response;
@@ -1148,11 +1195,11 @@ class RemoteLRS implements LRSInterface
         $response = $this->sendRequest(
             'GET',
             'agents',
-            [
-                'params' => [
+            array(
+                'params' => array(
                     'agent' => json_encode($agent->asVersion($this->version)),
-                ],
-            ]
+                )
+            )
         );
 
         if ($response->success) {
@@ -1170,9 +1217,7 @@ class RemoteLRS implements LRSInterface
         $this->endpoint = $value;
         return $this;
     }
-    public function getEndpoint() {
-        return $this->endpoint;
-    }
+    public function getEndpoint() { return $this->endpoint; }
     public function getEndpointServerRoot() {
         $parsed = parse_url($this->endpoint);
 
@@ -1191,38 +1236,32 @@ class RemoteLRS implements LRSInterface
         $this->version = $value;
         return $this;
     }
-    public function getVersion() {
-        return $this->version;
-    }
+    public function getVersion() { return $this->version; }
 
     public function setAuth() {
         $_num_args = func_num_args();
         if ($_num_args == 1) {
             $this->auth = func_get_arg(0);
-        } else if ($_num_args == 2) {
+        }
+        elseif ($_num_args == 2) {
             $this->auth = 'Basic ' . base64_encode(func_get_arg(0) . ':' . func_get_arg(1));
-        } else {
+        }
+        else {
             throw new \BadMethodCallException('setAuth requires 1 or 2 arguments');
         }
         return $this;
     }
-    public function getAuth() {
-        return $this->auth;
-    }
+    public function getAuth() { return $this->auth; }
 
     public function setProxy($value) {
         $this->proxy = $value;
         return $this;
     }
-    public function getProxy() {
-        return $this->proxy;
-    }
+    public function getProxy() { return $this->proxy; }
 
     public function setHeaders($value) {
         $this->headers = $value;
         return $this;
     }
-    public function getHeaders() {
-        return $this->headers;
-    }
+    public function getHeaders() { return $this->headers; }
 }
