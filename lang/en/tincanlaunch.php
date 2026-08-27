@@ -96,6 +96,18 @@ $string['tincanmultipleregs_help'] = 'If selected, allow the learner to start mo
 
 $string['apCreationFailed'] = 'Failed to create Watershed Activity Provider.';
 
+// Voiding of completed statements.
+$string['voidstatements'] = 'Void completed statements';
+$string['voidstatements_desc'] = 'Send a voiding statement to the LRS for every completion statement recorded against this activity id. Voiding does not delete the statements; it marks them as no longer valid so they no longer count towards completion.';
+$string['voidstatements_user'] = 'Learner';
+$string['voidstatements_allusers'] = 'All learners';
+$string['voidstatements_submit'] = 'Void completed statements';
+$string['voidstatements_confirm'] = 'Are you sure you want to void all completed statements for {$a}? This cannot be undone.';
+$string['voidstatements_result'] = 'Voided {$a->voided} statement(s). {$a->failed} statement(s) could not be voided.';
+$string['voidstatements_noverb'] = 'No completion verb is configured for this activity, so there are no completed statements to void.';
+$string['voidstatements_lrserror'] = 'Unable to retrieve statements from the LRS. Check the LRS settings and try again.';
+
+
 // Zip errors.
 $string['badmanifest'] = 'Some manifest errors: see errors log';
 $string['badimsmanifestlocation'] = 'A tincan.xml file was found but it was not in the root of your zip file, please re-package your course';

@@ -28,7 +28,7 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->version   = 2025082500;      // The current module version (Date: YYYYMMDDXX).
+$plugin->version   = 2026082600;      // The current module version (Date: YYYYMMDDXX).
 $plugin->requires  = 2024100700;      // Requires Moodle 4.5 version or later.
 $plugin->supported = [405, 501];
 $plugin->component = 'mod_tincanlaunch'; // To check on upgrade, that module sits in correct place.
