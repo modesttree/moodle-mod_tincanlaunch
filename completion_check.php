@@ -39,26 +39,21 @@ if ($completion->is_enabled($cm) && tincanlaunch_get_completion_verb($tincanlaun
     // Query to get the cached completion state (if available).
     $oldstate = $completion->get_data($cm, false, 0);
 
-    // If cached state is completed, we can skip the check.
-    if ($oldstate->completionstate != COMPLETION_COMPLETE) {
-        // Check to see if the activity has been completed.
-        $completion->update_state($cm, $possibleresult);
+    // Check to see if the activity has been completed.
+    $completion->update_state($cm, $possibleresult);
 
-        // Query the cache again to determine if a change in completion state has occurred.
-        $newstate = $completion->get_data($cm, false, 0);
+    // Query the cache again to determine if a change in completion state has occurred.
+    $newstate = $completion->get_data($cm, false, 0);
 
-        if ($oldstate->completionstate !== $newstate->completionstate) {
+    if ($oldstate->completionstate !== $newstate->completionstate) {
 
-            // Trigger Activity completed event.
-            $event = \mod_tincanlaunch\event\activity_completed::create(array(
-                'objectid' => $tincanlaunch->id,
-                'context' => $context,
-            ));
-            $event->add_record_snapshot('course_modules', $cm);
-            $event->add_record_snapshot('tincanlaunch', $tincanlaunch);
-            $event->trigger();
-        }
+        // Trigger Activity completed event.
+        $event = \mod_tincanlaunch\event\activity_completed::create(array(
+            'objectid' => $tincanlaunch->id,
+            'context' => $context,
+        ));
+        $event->add_record_snapshot('course_modules', $cm);
+        $event->add_record_snapshot('tincanlaunch', $tincanlaunch);
+        $event->trigger();
     }
-
-
 }

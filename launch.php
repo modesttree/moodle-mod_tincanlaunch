@@ -25,6 +25,7 @@
 namespace mod_tincanlaunch;
 
 require(__DIR__ . '/../../config.php');
+require_once($CFG->dirroot . '/user/profile/lib.php');
 require_once('header.php');
 require_login();
 
@@ -110,13 +111,20 @@ if ($lrsrespond != 204) {
 $agentprofiles['CMI5LearnerPreferences'] = ["languagePreference" => tincanlaunch_get_moodle_language()];
 
 // Check if there are any profile fields needing to be synced.
-$profilefields = explode(',', get_config('tincanlaunch', 'profilefields'));
-if (count($profilefields) > 0) {
+$profilefieldsconfig = get_config('tincanlaunch', 'profilefields');
+if (!empty($profilefieldsconfig)) {
+    // $USER->profile is not populated by default; load the custom profile fields.
+    profile_load_data($USER);
+
+    $profilefields = explode(',', $profilefieldsconfig);
     $agentprofiles['LMSUserFields'] = [];
     foreach ($profilefields as $profilefield) {
-        $profilefield = strtolower($profilefield);
+        $profilefield = strtolower(trim($profilefield));
+        if ($profilefield === '') {
+            continue;
+        }
         // Lookup profile field value.
-        if (array_key_exists($profilefield, $USER->profile)) {
+        if (isset($USER->profile) && array_key_exists($profilefield, $USER->profile)) {
             $agentprofiles['LMSUserFields'] = $agentprofiles['LMSUserFields'] +
                 [$profilefield => $USER->profile[$profilefield]];
         }
@@ -130,7 +138,7 @@ foreach ($agentprofiles as $key => $value) {
     if ($lrsrespond != 204) {
         // Failed to connect to LRS.
         echo $OUTPUT->notification(get_string('tincanlaunch_notavailable', 'tincanlaunch'), 'error');
-        debugging("<p>Error attempting to set learner preferences (" . key($agentprofile) .
+        debugging("<p>Error attempting to set learner preferences (" . $key .
             ") to Agent Profile API.</p><pre>" . var_dump($saveagentprofile) . "</pre>", DEBUG_DEVELOPER);
         die();
     }

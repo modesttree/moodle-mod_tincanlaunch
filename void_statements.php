@@ -112,6 +112,23 @@ if ($userid === -1) {
             ]),
             $result['failed'] > 0 ? 'warning' : 'success'
         );
+
+        // Re-evaluate completion now that statements have been voided. Unlike
+        // invalidatecache() (which only clears the MUC cache), reset_all_state()
+        // deletes the stored completion records and recalculates every tracked
+        // user immediately via the module's custom completion class, so the
+        // "Done" indicator is removed right away.
+        $completion = new completion_info($course);
+        if ($result['voided'] > 0 && $completion->is_enabled($cm)) {
+            if ($userid > 0) {
+                // Single user: recalculate their state against the LRS directly.
+                $completion->update_state($cm, COMPLETION_UNKNOWN, $userid);
+            } else {
+                // All users: wipe and recalculate the stored completion state for
+                // every tracked user of this activity.
+                $completion->reset_all_state($cm);
+            }
+        }
     }
 
     echo html_writer::link($returnurl, get_string('continue'), ['class' => 'btn btn-primary']);
