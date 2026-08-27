@@ -79,15 +79,4 @@ class activity_completed extends \core\event\base {
             array('id' => $this->contextinstanceid, 'activityid' => $this->objectid)
         );
     }
-
-    /**
-     * Replace add_to_log() statement.
-     *
-     * @return array of parameters to be passed to legacy add_to_log() function.
-     */
-    protected function get_legacy_logdata() {
-        return array($this->courseid, 'tincanlaunch', 'launch', 'launch.php?id=' . $this->contextinstanceid,
-                '', $this->contextinstanceid);
-    }
-
 }

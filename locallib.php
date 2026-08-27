@@ -154,7 +154,8 @@ function tincanlaunch_void_completed_statements($tincanlaunch, $userid = 0) {
         $tincanlaunchsettings['tincanlaunchlrsversion'],
         $tincanlaunch->tincanactivityid,
         $agent,
-        $verb
+        $verb,
+        null
     );
 
     if (!$statementsresponse->success) {
@@ -179,8 +180,11 @@ function tincanlaunch_void_completed_statements($tincanlaunch, $userid = 0) {
 
     foreach ($statementsresponse->content as $statement) {
         // Only void statements whose object is the activity being launched.
+        $activityname = basename($tincanlaunch->tincanactivityid);
         $target = $statement->getTarget();
-        if ($target->getObjectType() !== 'Activity' || $target->getId() !== $tincanlaunch->tincanactivityid) {
+        // TODO: Remove check for activityname after activityid when correct self-referencing AU is addressed in Xplorer
+        if ($target->getObjectType() !== 'Activity' || ($target->getId() !== $tincanlaunch->tincanactivityid && 
+            $target->getId() !== $tincanlaunch->tincanactivityid . '/' . $activityname)) {
             continue;
         }
 
