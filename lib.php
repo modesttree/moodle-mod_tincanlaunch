@@ -563,7 +563,7 @@ function tincanlaunch_validate_package($file) {
  * @param string $basicpass pass/secret for the LRS
  * @param string $version version of xAPI to use
  * @param string $activityid Activity Id to filter by
- * @param TinCan $agent Aagent Agent to filter by
+ * @param TinCan $agent Aagent Agent to filter by (null to include all learners)
  * @param string $verb Verb Id to filter by
  * @param string $since Since date to filter by
  * @return TinCan LRS Response
@@ -573,7 +573,6 @@ function tincanlaunch_get_statements($url, $basiclogin, $basicpass, $version, $a
     $lrs = new \TinCan\RemoteLRS($url, $version, $basiclogin, $basicpass);
 
     $statementsquery = array(
-        "agent" => $agent,
         "verb" => new \TinCan\Verb(array("id" => trim($verb))),
         "activity" => new \TinCan\Activity(array("id" => trim($activityid))),
         "related_activities" => "false",
@@ -581,6 +580,11 @@ function tincanlaunch_get_statements($url, $basiclogin, $basicpass, $version, $a
         // and debug output can inspect the statement target/object.
         "format" => "exact"
     );
+
+    // Agent is optional: when null, statements for all learners are returned.
+    if (!is_null($agent)) {
+        $statementsquery["agent"] = $agent;
+    }
 
     if (!is_null($since)) {
         $statementsquery["since"] = $since;

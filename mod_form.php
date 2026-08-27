@@ -181,6 +181,23 @@ class mod_tincanlaunch_mod_form extends moodleform_mod {
         $mform->hideIf('tincanmultipleregs', 'tincansimplelaunchnav', 'checked');
         $mform->addHelpButton('tincanmultipleregs', 'tincanmultipleregs', 'tincanlaunch');
 
+        // Voiding of completed statements (only available when editing an existing activity).
+        if (!empty($this->_cm)) {
+            $mform->addElement('header', 'voidstatementsheading', get_string('voidstatements', 'tincanlaunch'));
+            $voidurl = new moodle_url('/mod/tincanlaunch/void_statements.php', array('id' => $this->_cm->id));
+            $voidbutton = html_writer::link(
+                $voidurl,
+                get_string('voidstatements_submit', 'tincanlaunch'),
+                array('class' => 'btn btn-danger')
+            );
+            $mform->addElement(
+                'static',
+                'voidstatements',
+                get_string('voidstatements', 'tincanlaunch'),
+                $voidbutton . html_writer::div(get_string('voidstatements_desc', 'tincanlaunch'), 'text-muted mt-2')
+            );
+        }
+
         // Add standard elements, common to all modules.
         $this->standard_coursemodule_elements();
         // Add standard buttons, common to all modules.

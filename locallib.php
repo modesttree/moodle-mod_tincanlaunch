@@ -115,6 +115,99 @@ function tincan_launched_statement($registrationid) {
 }
 
 /**
+ * Voids completed statements in the LRS for a tincanlaunch activity.
+ *
+ * For every matching statement a voiding statement (verb "voided") is sent to
+ * the LRS referencing the original statement via a StatementRef. Voiding does
+ * not delete data from the LRS; per the xAPI specification it marks statements
+ * as no longer valid.
+ *
+ * @param stdClass $tincanlaunch The tincanlaunch instance record.
+ * @param int $userid Optional Moodle user id to limit voiding to a single learner. 0 voids for all learners.
+ * @return array Result with keys: 'success' (bool), 'voided' (int), 'failed' (int), 'error' (string|null).
+ */
+function tincanlaunch_void_completed_statements($tincanlaunch, $userid = 0) {
+    global $DB;
+
+    $tincanlaunchsettings = tincanlaunch_settings($tincanlaunch->id);
+    $verb = tincanlaunch_get_completion_verb($tincanlaunch);
+
+    if (empty($verb)) {
+        return array(
+            'success' => false,
+            'voided' => 0,
+            'failed' => 0,
+            'error' => get_string('voidstatements_noverb', 'tincanlaunch'),
+        );
+    }
+
+    $agent = null;
+    if (!empty($userid)) {
+        $user = $DB->get_record('user', array('id' => $userid), '*', MUST_EXIST);
+        $agent = tincanlaunch_getactor($tincanlaunch->id, $user);
+    }
+
+    $statementsresponse = tincanlaunch_get_statements(
+        $tincanlaunchsettings['tincanlaunchlrsendpoint'],
+        $tincanlaunchsettings['tincanlaunchlrslogin'],
+        $tincanlaunchsettings['tincanlaunchlrspass'],
+        $tincanlaunchsettings['tincanlaunchlrsversion'],
+        $tincanlaunch->tincanactivityid,
+        $agent,
+        $verb
+    );
+
+    if (!$statementsresponse->success) {
+        return array(
+            'success' => false,
+            'voided' => 0,
+            'failed' => 0,
+            'error' => get_string('voidstatements_lrserror', 'tincanlaunch'),
+        );
+    }
+
+    $lrs = new \TinCan\RemoteLRS(
+        $tincanlaunchsettings['tincanlaunchlrsendpoint'],
+        $tincanlaunchsettings['tincanlaunchlrsversion'],
+        $tincanlaunchsettings['tincanlaunchlrslogin'],
+        $tincanlaunchsettings['tincanlaunchlrspass']
+    );
+
+    $voidactor = tincanlaunch_getactor($tincanlaunch->id);
+    $voided = 0;
+    $failed = 0;
+
+    foreach ($statementsresponse->content as $statement) {
+        // Only void statements whose object is the activity being launched.
+        $target = $statement->getTarget();
+        if ($target->getObjectType() !== 'Activity' || $target->getId() !== $tincanlaunch->tincanactivityid) {
+            continue;
+        }
+
+        $voidstatement = new \TinCan\Statement(array(
+            'actor' => $voidactor,
+            'verb' => \TinCan\Verb::Voided(),
+            'object' => new \TinCan\StatementRef(array('id' => $statement->getId())),
+            'timestamp' => date(DATE_ATOM),
+        ));
+
+        $voidresponse = $lrs->saveStatement($voidstatement);
+        if ($voidresponse->success) {
+            $voided++;
+        } else {
+            $failed++;
+        }
+    }
+
+    return array(
+        'success' => true,
+        'voided' => $voided,
+        'failed' => $failed,
+        'error' => null,
+    );
+}
+
+/**
  * Builds a Tin Can launch link for the current module and a given registration
  *
  * @param string $registrationuuid The Tin Can Registration UUID associated with the launch.
@@ -358,7 +451,7 @@ function tincanlaunch_get_global_parameters_and_save_agentprofile($key, $data) {
 function tincanlaunch_get_global_parameters_and_get_state($key) {
     global $tincanlaunch;
     $tincanlaunchsettings = tincanlaunch_settings($tincanlaunch->id);
-
+    
     $lrs = new \TinCan\RemoteLRS(
         $tincanlaunchsettings['tincanlaunchlrsendpoint'],
         $tincanlaunchsettings['tincanlaunchlrsversion'],
