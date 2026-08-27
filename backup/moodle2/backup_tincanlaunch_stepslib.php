@@ -30,6 +30,7 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class backup_tincanlaunch_activity_structure_step extends backup_activity_structure_step {
+
     /**
      * Define the structure of the activity to be backed up.
      *
@@ -38,25 +39,20 @@ class backup_tincanlaunch_activity_structure_step extends backup_activity_struct
     protected function define_structure() {
 
         // Define each element separated.
-        $tincanlaunch = new backup_nested_element('tincanlaunch', ['id'], [
+        $tincanlaunch = new backup_nested_element('tincanlaunch', array('id'), array(
             'name', 'intro', 'introformat', 'tincanlaunchurl', 'tincanactivityid',
-            'tincanverbid', 'tincanexpiry', 'overridedefaults', 'tincanlaunchtype',
-            'tincanmultipleregs', 'tincansimplelaunchnav', 'grade', 'timecreated', 'timemodified']);
+            'tincanverbid', 'tincanexpiry', 'overridedefaults', 'tincanmultipleregs',
+            'tincansimplelaunchnav', 'timecreated', 'timemodified'));
 
-        $tincanlaunchlrs = new backup_nested_element(
-            'tincanlaunchlrs',
-            ['id'],
-            [ 'lrsendpoint', 'lrsauthentication', 'lrslogin', 'lrspass',
-            'customacchp',
-            'useactoremail',
-            'lrsduration']
-        );
+        $tincanlaunchlrs = new backup_nested_element('tincanlaunchlrs', array('id'),
+            array( 'lrsendpoint', 'lrsauthentication', 'lrslogin', 'lrspass',
+            'customacchp', 'useactoremail', 'lrsduration'));
 
         $tincanlaunch->add_child($tincanlaunchlrs);
 
         // Define sources.
-        $tincanlaunch->set_source_table('tincanlaunch', ['id' => backup::VAR_ACTIVITYID]);
-        $tincanlaunchlrs->set_source_table('tincanlaunch_lrs', ['tincanlaunchid' => backup::VAR_PARENTID]);
+        $tincanlaunch->set_source_table('tincanlaunch', array('id' => backup::VAR_ACTIVITYID));
+        $tincanlaunchlrs->set_source_table('tincanlaunch_lrs', array('tincanlaunchid' => backup::VAR_PARENTID));
 
         // Define file annotations.
         $tincanlaunch->annotate_files('mod_tincanlaunch', 'intro', null);

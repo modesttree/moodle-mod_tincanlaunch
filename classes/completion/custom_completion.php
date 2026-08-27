@@ -102,7 +102,11 @@ class custom_completion extends activity_custom_completion {
                     'objecttype' => $objecttype,
                 ), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES), DEBUG_DEVELOPER);
 
-                if ($objecttype == "Activity" && $tincanlaunch->tincanactivityid == $objectid) {
+                // TODO: Remove check for activityname after activityid when correct self-referencing AU is addressed in Xplorer
+                $activityname = basename($tincanlaunch->tincanactivityid);
+                if ($objecttype == "Activity"
+                        && ($objectid == $tincanlaunch->tincanactivityid
+                            || $objectid == $tincanlaunch->tincanactivityid . '/' . $activityname)) {
                     // If expiry is set, see if the timestamp is within expiry.
                     if ($expiryrangestartdate === null) {
                         $status = true;
